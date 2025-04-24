@@ -40,6 +40,7 @@ struct Project {
 struct MyEguiApp {
     projects: Vec<Project>,
     selected_project: Option<usize>,
+    
 
     show_new_project: bool,
     new_project_name: String,
@@ -52,6 +53,8 @@ struct MyEguiApp {
     show_task_edit: bool,
     edit_task_name: String,
     editing_task_index: Option<usize>,
+    filter_text: String,
+    hide_completed: bool,
 }
 
 impl Default for MyEguiApp {
@@ -71,6 +74,8 @@ impl Default for MyEguiApp {
             show_task_edit: false,
             edit_task_name: String::new(),
             editing_task_index: None,
+            filter_text: String::new(),
+            hide_completed: false,
         }
     }
 }
@@ -399,31 +404,49 @@ impl eframe::App for MyEguiApp {
             CentralPanel::default().show(ctx, |ui| {
                 ui.heading(&project.name);
                 ui.add_space(4.0);
-
-                if ui.button("Add Task").clicked() {
-                    self.new_task_name.clear();
-                    self.show_new_task = true;
-                }
+            
+                // controls for filters
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.hide_completed, "Hide completed");
+                    ui.label("Search:");
+                    ui.text_edit_singleline(&mut self.filter_text);
+                });
                 ui.separator();
-
+            
+                // ── single, combined loop ──
                 for (ti, task) in project.tasks.iter_mut().enumerate() {
+                    // hide completed 
+                    if self.hide_completed && task.done {
+                        continue;
+                    }
+                    // filter
+                    let needle = self.filter_text.to_lowercase();
+                    if !needle.is_empty() &&
+                       !task.name.to_lowercase().contains(&needle)
+                    {
+                        continue;
+                    }
+            
+                    // draw rows
                     ui.horizontal(|ui| {
-                        // checkbox + label
                         ui.checkbox(&mut task.done, "");
                         ui.label(&task.name);
-
-                        // edit task
+            
                         if ui.small_button("✒").clicked() {
                             self.editing_task_index = Some(ti);
-                            self.edit_task_name = task.name.clone();
-                            self.show_task_edit = true;
+                            self.edit_task_name      = task.name.clone();
+                            self.show_task_edit      = true;
                         }
-
-                        // delete task
                         if ui.small_button("🗑").clicked() {
                             to_delete_task = Some(ti);
                         }
                     });
+                }
+            
+                ui.add_space(8.0);
+                if ui.button("Add Task").clicked() {
+                    self.new_task_name.clear();
+                    self.show_new_task = true;
                 }
             });
             if let Some(ti) = to_delete_task {
