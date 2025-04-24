@@ -1,11 +1,14 @@
+use std::fs;
+use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
 use eframe::egui;
 use eframe::egui::{
-    CentralPanel, Color32, Context, Frame, Id, SidePanel, containers::modal::Modal,
+    CentralPanel, Color32, Frame, SidePanel, containers::modal::Modal,
 };
 
-use egui::{FontData, FontFamily, FontId, Key, Sense, Window};
+use egui::{FontData, FontFamily, FontId, Key};
+use serde::{Deserialize, Serialize};
 
 fn main() -> eframe::Result {
     let native_options = eframe::NativeOptions {
@@ -23,12 +26,12 @@ pub struct FontDefinitions {
     pub font_data: BTreeMap<String, Arc<FontData>>,
     pub families: BTreeMap<FontFamily, Vec<String>>,
 }
-
+#[derive(Serialize, Deserialize)]
 struct Task {
     name: String,
     done: bool,
 }
-
+#[derive(Serialize, Deserialize)]
 struct Project {
     name: String,
     tasks: Vec<Task>,
@@ -73,6 +76,27 @@ impl Default for MyEguiApp {
 }
 //styling
 impl MyEguiApp {
+    const STATE_FILE: &'static str = "projects.json";
+    fn load_state() -> Vec<Project> {
+        // look in a standard config directory (create if needed)
+        let mut path = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+        path.push(Self::STATE_FILE);
+        if let Ok(json) = std::fs::read_to_string(&path) {
+            if let Ok(state) = serde_json::from_str::<Vec<Project>>(&json) {
+                return state;
+            }
+        }
+        Vec::new()
+    }
+    fn save_state(&self) {
+        let mut path: PathBuf =
+            dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+        let _ = fs::create_dir_all(&path);
+        path.push(Self::STATE_FILE);
+        if let Ok(json) = serde_json::to_string_pretty(&self.projects) {
+            let _ = fs::write(path, json);
+        }
+    }
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // --- Custom font & style setup ---
         let mut fonts = egui::FontDefinitions::default();
@@ -96,12 +120,50 @@ impl MyEguiApp {
         style.override_font_id = Some(FontId::new(16.0, FontFamily::Proportional));
         cc.egui_ctx.set_style(style);
 
-        Self::default()
+        let mut app = Self::default();
+        app.projects = Self::load_state();
+        app
+    }
+
+}
+
+impl Drop for MyEguiApp {
+    fn drop(&mut self) {
+        self.save_state();
     }
 }
+
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // ── 1) NEW PROJECT MODAL ─────────────────────────────────────────
+        // new project
+        let mut to_delete_project: Option<usize> = None;
+        
+        if ctx.input(|i| i.key_pressed(Key::Delete)) {
+            if let Some(idx) = self.selected_project {
+                to_delete_project = Some(idx);
+            }
+        }
+        let mods = ctx.input(|i| i.modifiers);
+        // Ctrl/Cmd + N - new project
+        if ctx.input(|i| i.key_pressed(Key::N)) && (mods.ctrl || mods.command) {
+            self.new_project_name.clear();
+            self.show_new_project = true;
+        }
+        // Ctrl/Cmd + T - new task
+        if ctx.input(|i| i.key_pressed(Key::T)) && (mods.ctrl || mods.command) {
+            if self.selected_project.is_some() {
+                self.new_task_name.clear();
+                self.show_new_task = true;
+            }
+        }
+        //F2 - rename
+        if ctx.input(|i| i.key_pressed(Key::F2)) {
+            if let Some(idx) = self.selected_project {
+                self.project_edit_index = Some(idx);
+                self.project_edit_name  = self.projects[idx].name.clone();
+                self.show_project_edit = true;
+            }
+        }
         if self.show_new_project {
             Modal::new(egui::Id::new("new_project"))
                 .backdrop_color(Color32::from_black_alpha(180))
@@ -128,6 +190,7 @@ impl eframe::App for MyEguiApp {
                         self.show_new_project = false;
                     }
 
+
                     ui.horizontal(|ui| {
                         if ui.button("Create").clicked() {
                             let name = self.new_project_name.trim();
@@ -148,7 +211,7 @@ impl eframe::App for MyEguiApp {
                 });
         }
 
-        // ── 2) EDIT PROJECT MODAL ────────────────────────────────────────
+        //edit project
         if self.show_project_edit {
             Modal::new(egui::Id::new("edit_project"))
                 .backdrop_color(Color32::from_black_alpha(180))
@@ -191,14 +254,13 @@ impl eframe::App for MyEguiApp {
                     });
                 });
         }
-
-        // ── 3) SIDE PANEL: PROJECT LIST + CONTROLS ───────────────────────
-        let mut to_delete_project: Option<usize> = None;
+        //side panel
+  
 
         SidePanel::left("left_panel")
             .resizable(true)
-            .default_width(300.0)
-            .width_range(100.0..=600.0)
+            .default_width(500.0)
+            .width_range(200.0..=700.0)
             .show(ctx, |ui| {
                 ui.heading("Projects");
                 ui.add_space(4.0);
@@ -239,8 +301,7 @@ impl eframe::App for MyEguiApp {
                 self.selected_project = sel.checked_sub(1).filter(|&j| j != i || sel != i);
             }
         }
-
-        // ── 4) TASK AREA ────────────────────────────────────────────────
+        //task area
         if let Some(proj_idx) = self.selected_project {
             let project = &mut self.projects[proj_idx];
 
@@ -289,8 +350,7 @@ impl eframe::App for MyEguiApp {
                         });
                     });
             }
-
-            // Edit‐task modal
+            //edit task modal
             if self.show_task_edit {
                 Modal::new(egui::Id::new("edit_task"))
                     .backdrop_color(Color32::from_black_alpha(180))
@@ -334,7 +394,7 @@ impl eframe::App for MyEguiApp {
                     });
             }
 
-            // Task list + controls
+            // task list + controls
             let mut to_delete_task: Option<usize> = None;
             CentralPanel::default().show(ctx, |ui| {
                 ui.heading(&project.name);
@@ -370,7 +430,7 @@ impl eframe::App for MyEguiApp {
                 project.tasks.remove(ti);
             }
         } else {
-            // ── 5) FALLBACK CENTRAL PANEL ──────────────────────────────────
+         //Fallback 
             CentralPanel::default().show(ctx, |ui| {
                 ui.label("Select a project on the left");
             });
