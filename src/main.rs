@@ -1,16 +1,14 @@
-use std::{collections::BTreeMap, sync::Arc};
+mod ui;
 
 use eframe::egui;
 use eframe::egui::CentralPanel;
-
 use egui::{FontData, FontFamily, FontId, Key};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::time::Duration;
 use ui::panels::{central_panel, left_panel};
 use ui::projects::{edit_project_modal, new_project_modal};
 use ui::tasks::{show_new_task, show_task_edit};
-mod ui;
-mod persistence;
-use crate::persistence::{load_state, save_state};
 
 #[derive(Serialize, Deserialize)]
 pub struct Task {
@@ -26,22 +24,20 @@ pub struct Project {
 
 fn main() -> eframe::Result {
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 768.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1024.0, 768.0])
+            .with_app_id("task-manager"),
         ..Default::default()
     };
     eframe::run_native(
-        "Projects and Task Manager",
+        "Task Manager",
         native_options,
-        Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(TaskManager::new(cc)))),
     )
 }
 
-pub struct FontDefinitions {
-    pub font_data: BTreeMap<String, Arc<FontData>>,
-    pub families: BTreeMap<FontFamily, Vec<String>>,
-}
-
-struct MyEguiApp {
+#[derive(Default)]
+struct TaskManager {
     projects: Vec<Project>,
     selected_project: Option<usize>,
 
@@ -60,47 +56,28 @@ struct MyEguiApp {
     hide_completed: bool,
 }
 
-impl Default for MyEguiApp {
-    fn default() -> Self {
-        Self {
-            projects: Vec::new(),
-            selected_project: None,
-
-            show_new_project: false,
-            new_project_name: String::new(),
-            show_project_edit: false,
-            project_edit_name: String::new(),
-            project_edit_index: None,
-
-            show_new_task: false,
-            new_task_name: String::new(),
-            show_task_edit: false,
-            edit_task_name: String::new(),
-            editing_task_index: None,
-            filter_text: String::new(),
-            hide_completed: false,
-        }
-    }
-}
-//styling
-impl MyEguiApp {
+impl TaskManager {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // --- Custom font & style setup ---
-        let mut fonts = egui::FontDefinitions::default();
-        fonts.font_data.insert(
-            "custom".to_owned(),
-            Arc::new(FontData::from_static(include_bytes!("../assets/font.ttf"))),
-        );
-        fonts
-            .families
-            .get_mut(&FontFamily::Proportional)
-            .unwrap()
-            .insert(0, "custom".to_owned());
-        fonts
-            .families
-            .get_mut(&FontFamily::Monospace)
-            .unwrap()
-            .push("custom".to_owned());
+        let fonts = {
+            let mut fonts = egui::FontDefinitions::default();
+            fonts.font_data.insert(
+                "custom".to_owned(),
+                Arc::new(FontData::from_static(include_bytes!("../assets/font.ttf"))),
+            );
+            fonts
+                .families
+                .get_mut(&FontFamily::Proportional)
+                .unwrap()
+                .insert(0, "custom".to_owned());
+            fonts
+                .families
+                .get_mut(&FontFamily::Monospace)
+                .unwrap()
+                .push("custom".to_owned());
+            fonts
+        };
+
         cc.egui_ctx.set_fonts(fonts);
 
         let mut style = (*cc.egui_ctx.style()).clone();
@@ -108,22 +85,28 @@ impl MyEguiApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self::default();
-        app.projects = load_state();
+
+        if let Some(storage) = cc.storage {
+            if let Some(projects_json) = storage.get_string("projects") {
+                app.projects = serde_json::from_str(&projects_json).expect("Invalid JSON");
+            }
+        }
+
         app
     }
 }
 
-impl Drop for MyEguiApp {
-    fn drop(&mut self) {
-        save_state(&self.projects);
+impl eframe::App for TaskManager {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        if let Ok(projects_json) = serde_json::to_string_pretty(&self.projects) {
+            storage.set_string("projects", projects_json);
+        }
     }
-}
 
+    fn auto_save_interval(&self) -> std::time::Duration {
+        Duration::from_secs(5)
+    }
 
-
-
-
-impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // new project
         let mut to_delete_project: Option<usize> = None;

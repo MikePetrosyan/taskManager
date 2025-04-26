@@ -25,10 +25,10 @@ cargo run
 
 ## JSON Persistence
 
-The app stores its data in `projects.json` under your OS’s config directory:
+The app stores its data in `app.ron` under your OS’s data directory:
 
-- **Windows**: `%APPDATA%\projects.json`
-- **Linux**: `~/.config/projects.json`
-- **macOS**: `~/Library/Application Support/projects.json`
+- Linux: /home/UserName/.local/share/task-manager
+- macOS: /Users/UserName/Library/Application Support/task-manager
+- Windows: C:\Users\UserName\AppData\Roaming\task-manager\data
 
 If that file is missing or malformed, the app will start empty and recreate it on exit.
