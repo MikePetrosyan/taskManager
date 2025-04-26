@@ -108,7 +108,6 @@ impl eframe::App for TaskManager {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // new project
         let mut to_delete_project: Option<usize> = None;
 
         if ctx.input(|i| i.key_pressed(Key::Delete)) {

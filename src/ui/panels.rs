@@ -76,7 +76,6 @@ pub fn central_panel(
         });
         ui.separator();
 
-        // ── single, combined loop ──
         for (ti, task) in project.tasks.iter_mut().enumerate() {
             // hide completed
             if *hide_completed && task.done {
