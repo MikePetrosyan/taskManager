@@ -9,20 +9,19 @@ A simple desktop project and task manager built with Rust and eframe/egui, persi
 - Rust toolchain (which includes `cargo`)
 - Git (if you’re cloning from a repo)
 
-## Build & Run
+## Build & run in one step:
 
-**Clone & enter directory**
-
-```bash
-git clone https://github.com/yourname/task-manager.git
-cd task-manager
-```
-# Build & run in one step:
+```sh
 cargo run
+```
+## Keyboard Shortcuts
 
-# Or build a production binary:
-cargo build --release
-./target/release/task_manager    # or .exe on Windows
+- Ctrl + N: Create new project
+- Ctrl + T: Create new task
+- F2: Rename selected project
+- Delete: Delete selected project
+- Escape: Exit dialog
+- Enter: Submit dialog
 
 ## JSON Persistence
 
